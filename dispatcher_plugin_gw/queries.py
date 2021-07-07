@@ -95,7 +95,7 @@ class SpectrogramProduct:
             dset.attrs['yindex'] = self.sgram.yindex
 
     def get_spectrogram_plot(self):
-        plot = self.sgram.plot()
+        plot = self.sgram.plot(dpi=60)
         ax = plot.gca()
         plot.colorbar(label="Normalised energy")
         ax.grid(False)
