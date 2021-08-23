@@ -59,11 +59,11 @@ class GWDispatcher:
 
     def test_has_input_products(self, instrument, logger=None):
         query_out = self.test_communication(logger=logger)
-        return query_out, [1] 
+        return query_out, [1] #dummy
 
     def run_query(self,
                   call_back_url=None,
-                  run_asynch = False,
+                  run_asynch = False, #TODO: it should really be True in most cases. To test
                   logger=None,
                   task = None,
                   param_dict=None):
