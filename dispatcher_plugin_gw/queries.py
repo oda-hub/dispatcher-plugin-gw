@@ -1,12 +1,14 @@
+import numpy as np
 from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
 from cdci_data_analysis.analysis.parameters import Float, Integer, Time, ParameterRange, Name, Parameter
 from cdci_data_analysis.analysis.products import QueryOutput
 from gwpy.spectrogram import Spectrogram
+from gwpy.timeseries.timeseries import TimeSeries
 import h5py
 from bokeh.plotting import figure
 from bokeh.models import ColorBar, LinearColorMapper, HoverTool, CustomJS, Slider 
 from bokeh.embed import components
-from bokeh.layouts import row, widgetbox
+from bokeh.layouts import row, widgetbox, column
 from gwpy.time import from_gps
 
 class Boolean(Parameter):
@@ -227,3 +229,119 @@ class SpectrogramProduct:
 
     def change_image_contrast(self, attr, old, new):
         self.fig_im.glyph.color_mapper.update(low=self.graph_min_slider.value, high=self.graph_max_slider.value)
+        
+        
+class GWStrainQuery(ProductQuery):
+    def __init__(self, name):
+                whiten = Boolean(value=True, name='whiten')
+                fmin = Integer(value=30, name='fmin')
+                fmax = Integer(value=400, name='fmax')
+                parameters_list = [whiten, fmin, fmax]
+                super().__init__(name, parameters_list)
+
+    def get_data_server_query(self, instrument, config, **kwargs):
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
+                          t2 = instrument.get_par_by_name('T2').value,
+                          detector = instrument.get_par_by_name('detector').value,
+                          whiten = instrument.get_par_by_name('whiten').value,
+                          fmin = instrument.get_par_by_name('fmin').value,
+                          fmax = instrument.get_par_by_name('fmax').value)
+        return instrument.data_server_query_class(instrument=instrument,
+                                                  config=config,
+                                                  param_dict=param_dict,
+                                                  task='/api/v1.0/get/strain')
+
+    def build_product_list(self, instrument, res, out_dir, api=False):
+        prod_list = []
+        if out_dir is None:
+            out_dir = './'
+        _o_dict = res.json()
+        ori_strain = TimeSeries(_o_dict['output']['ori_strain'],
+                                t0 = _o_dict['output']['t0'],
+                                dt = _o_dict['output']['dt'])
+        filt_strain = TimeSeries(_o_dict['output']['bp_strain'],
+                                t0 = _o_dict['output']['t0'],
+                                dt = _o_dict['output']['dt'])
+        dp = StrainProduct(ori_strain=ori_strain,
+                            filt_strain=filt_strain,
+                            out_dir=out_dir)
+        prod_list.append(dp)       
+        return prod_list
+
+    def process_product_method(self, instrument, prod_list, api=False):
+        if api is True:
+            raise NotImplementedError
+        else:
+            prod  = prod_list.prod_list[0]
+            prod.write()
+            script, div = prod.get_strains_plot()
+            html_dict = {}
+            html_dict['script'] = script
+            html_dict['div'] = div
+            plot_dict = {}
+            plot_dict['image'] = html_dict
+            plot_dict['header_text'] = ''
+            plot_dict['table_text'] = ''
+            plot_dict['footer_text'] = ''
+
+            query_out = QueryOutput()
+            query_out.prod_dictionary['name'] = 'strain'
+            query_out.prod_dictionary['file_name'] = 'strain.h5'
+            query_out.prod_dictionary['image'] = plot_dict
+            query_out.prod_dictionary['download_file_name'] = 'gw_strain.h5'
+            query_out.prod_dictionary['prod_process_message'] = ''
+
+        return query_out
+
+
+class StrainProduct:
+    def __init__(self, ori_strain, filt_strain=None, out_dir=None):
+        self.ori_strain = ori_strain
+        self.filt_strain = filt_strain
+        self.out_dir = out_dir
+
+    def write(self):
+        with h5py.File(self.out_dir + '/strain.h5', 'w') as fd:
+            dset = fd.create_dataset('ori_strain', data=self.ori_strain.value)
+            dset.attrs['t0'] = self.ori_strain.t0
+            dset.attrs['dx'] = self.ori_strain.dt
+            if self.filt_strain is not None:
+                dset1 = fd.create_dataset('filt_strain', data=self.filt_strain.value)
+                dset1.attrs['t0'] = self.filt_strain.t0
+                dset1.attrs['dx'] = self.filt_strain.dt
+    
+    def get_strains_plot(self):
+        
+        evt = from_gps(self.ori_strain.t0.value)
+        times = np.arange(0, 
+                          self.ori_strain.dt.value * len(self.ori_strain) + 1,
+                          self.ori_strain.dt.value )
+       
+        hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
+                          
+        fig = figure(tools=[hover, 'pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
+                   plot_height=250,
+                   plot_width=700,
+                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
+                                                                    self.ori_strain.t0.value),
+                   )
+        ln = fig.line(times, self.ori_strain.value, line_color='blue')
+
+        if self.filt_strain is not None:
+            hover1 = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
+                          
+            fig1 = figure(tools=[hover, 'pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
+                    plot_height=250,
+                    plot_width=700,
+                    x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
+                                                                        self.ori_strain.t0.value),
+                    )
+            ln1 = fig1.line(times, self.filt_strain.value, line_color='blue')
+
+            layout = column(fig, fig1)
+        else:
+            layout = fig
+
+        script, div = components(layout)
+
+        return script, div
