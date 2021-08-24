@@ -3,9 +3,10 @@ from cdci_data_analysis.analysis.parameters import Float, Integer, Time, Paramet
 from cdci_data_analysis.analysis.products import QueryOutput
 from gwpy.spectrogram import Spectrogram
 import h5py
-from bokeh.plotting import show, figure, output_notebook
-from bokeh.models import ColorBar, LinearColorMapper
+from bokeh.plotting import figure
+from bokeh.models import ColorBar, LinearColorMapper, HoverTool, CustomJS, Slider 
 from bokeh.embed import components
+from bokeh.layouts import row, widgetbox
 from gwpy.time import from_gps
 
 class Boolean(Parameter):
@@ -145,37 +146,84 @@ class SpectrogramProduct:
         
         evt = from_gps(self.sgram.x0.value)
         
-        p = figure(#tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")], 
-                y_axis_type="log", 
-                y_range=(self.sgram.yindex[0].value, self.sgram.yindex[-1].value), 
-                x_range=(0, self.sgram.dx.value * len(self.sgram.xindex)),
-                plot_height=300,
-                plot_width=600,
-                x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                  self.sgram.x0.value),
-                y_axis_label = 'Frequency [Hz]')
-
-        #p.x_range.range_padding = 0
-
-        color_map = LinearColorMapper(palette='Plasma256', 
-                                      low=self.sgram.min().value,
-                                      high=self.sgram.max().value)
-
-        p.image(image=[self.sgram.T], 
-                x=0, 
-                y=self.sgram.yindex[0].value, 
-                dw=self.sgram.dx.value * len(self.sgram.xindex), 
-                dh=self.sgram.yindex[-1].value-self.sgram.yindex[0].value, 
-                color_mapper=color_map)
+        #TODO: almost copy of cdci_data_analysis.analysis.plot_tools.Image
+        #      would be better to implement needed functionality (axes titles etc.) there
         
-        # FIXME: doesn't work with bokeh 0.12.16 in cdci_data_analysis requirements
-        # does it really need to be such restricted?
-        #color_bar = ColorBar(color_mapper=color_map, 
-                            #  label_standoff=5, 
-                            #  width=10, 
-                            #  title="Normalised energy")
+        fig = figure(tools=['pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
+                   y_axis_type="log", 
+                   y_range=(self.sgram.yindex[0].value, self.sgram.yindex[-1].value), 
+                   x_range=(0, self.sgram.dx.value * len(self.sgram.xindex)),
+                   plot_height=350,
+                   plot_width=650,
+                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
+                                                                    self.sgram.x0.value),
+                   y_axis_label = 'Frequency [Hz]')
+
+        min_s = self.sgram.min().value
+        max_s = self.sgram.max().value
         
-        #p.add_layout(color_bar, 'right')
+        color_mapper = LinearColorMapper(palette='Plasma256', 
+                                      low=min_s,
+                                      high=max_s)
+
+        fig_im = fig.image(image=[self.sgram.T], 
+                           x=0, 
+                           y=self.sgram.yindex[0].value, 
+                           dw=self.sgram.dx.value * len(self.sgram.xindex), 
+                           dh=self.sgram.yindex[-1].value-self.sgram.yindex[0].value, 
+                           color_mapper=color_mapper)
         
-        script, div = components(p)
+        hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")],
+                          renderers=[fig_im])
+        
+        fig.add_tools(hover)
+        
+        color_bar = ColorBar(color_mapper=color_mapper, 
+                             label_standoff=5, 
+                             location=(0,0),
+                             width=10)
+        
+        JS_code_slider = """
+                   var vmin = low_slider.value;
+                   var vmax = high_slider.value;
+                   fig_im.glyph.color_mapper.high = vmax;
+                   fig_im.glyph.color_mapper.low = vmin;
+               """
+
+        callback = CustomJS(args=dict(fig_im=fig_im), code=JS_code_slider)
+
+        self.graph_min_slider = Slider(title="Norm. En. Min", 
+                                       start=min_s, 
+                                       end=max_s, 
+                                       step=1, 
+                                       value=min_s, 
+                                       callback=callback,
+                                       width=150)
+        self.graph_max_slider = Slider(title="Norm. En. Max", 
+                                       start=min_s, 
+                                       end=max_s, 
+                                       step=1, 
+                                       value=0.8 * max_s, 
+                                       callback=callback,
+                                       width=150)
+
+        self.graph_min_slider.on_change('value', self.change_image_contrast)
+        self.graph_max_slider.on_change('value', self.change_image_contrast)
+
+        callback.args["low_slider"] = self.graph_min_slider
+        callback.args["high_slider"] = self.graph_max_slider
+
+        fig.add_layout(color_bar, 'right')
+
+        layout = row(
+            fig, widgetbox(self.graph_min_slider, 
+                           self.graph_max_slider, 
+                          ),
+        )
+
+        script, div = components(layout)
+
         return script, div
+
+    def change_image_contrast(self, attr, old, new):
+        self.fig_im.glyph.color_mapper.update(low=self.graph_min_slider.value, high=self.graph_max_slider.value)
