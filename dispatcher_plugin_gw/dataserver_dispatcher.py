@@ -16,8 +16,8 @@ class GWDispatcher:
 
         query_out = QueryOutput()
         no_connection = True
-        debug_message='OK'
-
+        excep = Exception()
+        
         print('url', self.data_server_url)
         url = self.data_server_url
 
@@ -27,39 +27,61 @@ class GWDispatcher:
                 print('status_code',res.status_code)
                 if res.status_code !=200:
                     no_connection =True
-                    e = ConnectionError(f"Backend connection failed: {res.status_code}")
+                    raise ConnectionError(f"Backend connection failed: {res.status_code}")
                 else:
                     no_connection=False
 
                     message = 'Connection OK'
-                    query_out.set_done(message=message, debug_message=str(debug_message))
+                    query_out.set_done(message=message, debug_message='OK')
+                    print('-> test connections passed')
                     break
             except Exception as e:
+                excep = e
                 no_connection = True
 
             time.sleep(sleep_s)
 
         if no_connection is True:
-            message = 'no data server connection'
-            debug_message = 'no data server connection'
-            connection_status_message = 'no data server connection'
-
-            query_out.set_failed(message,
-                                 message='connection_status=%s' % connection_status_message,
-                                 logger=logger,
-                                 excep=e,
-                                 e_message=message,
-                                 debug_message=debug_message)
-
-            raise Exception('Connection Error', debug_message)
-
-        print('-> test connections passed')
+            query_out.set_query_exception(excep, 
+                                          'no data server connection',
+                                          logger=logger)
+            raise ConnectionError('Backend connection failed')
 
         return query_out
+    
 
     def test_has_input_products(self, instrument, logger=None):
-        query_out = self.test_communication(logger=logger)
-        return query_out, [1] #dummy
+        print('--> test for data availability')
+
+        query_out = QueryOutput()
+        streaks = []
+        
+        url = self.data_server_url + '/api/v1.0/get/checkdata'
+        print('url', url)
+        
+        t1 = instrument.get_par_by_name('T1').value
+        t2 = instrument.get_par_by_name('T2').value
+        detector = instrument.get_par_by_name('detector').value
+        
+        res = requests.get("%s" % (url), 
+                           params={'t1': t1, 't2': t2, 'detector': detector})
+        if res.status_code == 200:
+            _o_dict = res.json()
+            if _o_dict['output']['ok_flag'] is True:
+                streaks.append(1) # dummy
+                query_out.set_done('streak data available')
+            else:
+                query_out.set_failed('no data available')                
+                raise RuntimeError('no data available')
+        else:
+            excep = RuntimeError('error checking data availability')
+            query_out.set_query_exception('error checking data availability', 
+                                          message='connection status code: ' + str(res.status_code), 
+                                          debug_message=res.text)
+            raise excep
+            
+        return query_out, streaks
+    
 
     def run_query(self,
                   call_back_url=None,
