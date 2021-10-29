@@ -1,7 +1,9 @@
+from h5py._hl import base
 import numpy as np
 from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
 from cdci_data_analysis.analysis.parameters import Float, Integer, Time, ParameterRange, Name, Parameter
-from cdci_data_analysis.analysis.products import QueryOutput
+from cdci_data_analysis.analysis.products import QueryOutput, CatalogProduct
+from cdci_data_analysis.analysis.catalog import BasicCatalog
 from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
 import h5py
@@ -10,7 +12,9 @@ from bokeh.models import ColorBar, LinearColorMapper, HoverTool, CustomJS, Slide
 from bokeh.embed import components
 from bokeh.layouts import row, widgetbox, column
 from gwpy.time import from_gps
-
+import base64
+from astropy.io.ascii import read as aread
+ 
 class Boolean(Parameter):
     def __init__(self, value=None, name=None):
 
@@ -345,3 +349,73 @@ class StrainProduct:
         script, div = components(layout)
 
         return script, div
+    
+    
+class GWImageQuery(ProductQuery):
+    def __init__(self, name):
+        super().__init__(name, [])
+
+    def get_data_server_query(self, instrument, config, **kwargs):
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
+                          t2 = instrument.get_par_by_name('T2').value)
+        return instrument.data_server_query_class(instrument=instrument,
+                                                  config=config,
+                                                  param_dict=param_dict,
+                                                  task='/api/v1.0/get/events')
+
+    def build_product_list(self, instrument, res, out_dir, api=False):
+        if out_dir is None:
+            out_dir = './'
+        _o_dict = res.json()
+        asciicat = _o_dict['output']['asciicat']
+        jpgdata = _o_dict['output']['jpgdata']
+        prod_list = [asciicat, jpgdata]
+        return prod_list
+
+    def process_product_method(self, instrument, prod_list, api=False):
+        if api is True:
+            raise NotImplementedError
+        else:
+            image  = prod_list.prod_list[1]
+            catalog = prod_list.prod_list[0]
+            # prod.write() TODO: writing fits file(s)
+            with open('image.jpeg', 'wb') as ofd:
+                ofd.write(base64.b64decode(image))
+            
+            with open('catalog.ecsv', 'w') as ofd:
+                ofd.write(catalog)
+            
+            script = ''
+            div = f'<img src="data:image/jpeg;base64,{image}">'
+            
+            html_dict = {}
+            html_dict['script'] = script
+            html_dict['div'] = div
+            plot_dict = {}
+            plot_dict['image'] = html_dict
+            plot_dict['header_text'] = ''
+            plot_dict['table_text'] = ''
+            plot_dict['footer_text'] = ''
+
+            query_out = QueryOutput()
+            query_out.prod_dictionary['name'] = 'image'
+            query_out.prod_dictionary['file_name'] = ['catalog.ecsv', 'image.jpeg'] # TODO: fits instead of png
+            query_out.prod_dictionary['image'] = plot_dict
+            query_out.prod_dictionary['download_file_name'] = 'gw_image.tar.gz' # FIXME: download doesn't work properly
+            query_out.prod_dictionary['prod_process_message'] = ''
+            
+            catalog_table = aread(catalog)
+            catalog_table.add_column(np.arange(len(catalog_table)), name='index', index=0)
+            
+            column_lists=[catalog_table[name].tolist() for name in catalog_table.colnames]
+            for ID,_col in enumerate(column_lists):
+                column_lists[ID] = [x if str(x)!='nan' else None for x in _col]
+
+            catalog_dict = dict(cat_column_list=column_lists,
+                    cat_column_names=catalog_table.colnames,
+                    cat_column_descr=catalog_table.dtype.descr,
+                    )
+            
+            query_out.prod_dictionary['catalog'] = catalog_dict
+
+        return query_out

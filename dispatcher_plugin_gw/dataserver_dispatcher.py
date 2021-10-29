@@ -68,7 +68,7 @@ class GWDispatcher:
         if res.status_code == 200:
             _o_dict = res.json()
             if _o_dict['output']['ok_flag'] is True:
-                streaks.append(1) # dummy
+                #streaks.append(1) # dummy
                 query_out.set_done('streak data available')
             else:
                 query_out.set_failed('no data available')                
@@ -85,7 +85,7 @@ class GWDispatcher:
 
     def run_query(self,
                   call_back_url=None,
-                  run_asynch = False, #TODO: it should really be True in most cases. To test
+                  run_asynch = True, #TODO: it should really be True in most cases. To test
                   logger=None,
                   task = None,
                   param_dict=None):
@@ -101,9 +101,12 @@ class GWDispatcher:
         if param_dict is None:
             param_dict=self.param_dict   
 
-        #TODO: handle fail
         url = "%s/%s" % (self.data_server_url, task)
         res = requests.get("%s" % (url), params = param_dict)
-        query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+        if res.status_code == 200:
+            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+        else:
+            query_out.set_failed('Error in the backend', message='connection status code: ' + str(res.status_code))
+            raise RuntimeError('Error in the backend')
 
         return res, query_out
