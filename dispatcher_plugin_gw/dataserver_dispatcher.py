@@ -85,7 +85,7 @@ class GWDispatcher:
 
     def run_query(self,
                   call_back_url=None,
-                  run_asynch = True, #TODO: it should really be True in most cases. To test
+                  run_asynch = False, #TODO: it should really be True in most cases. To test
                   logger=None,
                   task = None,
                   param_dict=None):

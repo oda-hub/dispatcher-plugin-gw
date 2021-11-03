@@ -14,6 +14,7 @@ from bokeh.layouts import row, widgetbox, column
 from gwpy.time import from_gps
 import base64
 from astropy.io.ascii import read as aread
+import os
  
 class Boolean(Parameter):
     def __init__(self, value=None, name=None):
@@ -369,7 +370,17 @@ class GWImageQuery(ProductQuery):
         _o_dict = res.json()
         asciicat = _o_dict['output']['asciicat']
         jpgdata = _o_dict['output']['jpgdata']
+        
         prod_list = [asciicat, jpgdata]
+        
+        # TODO: prepare proper fits file
+        
+        with open(out_dir + '/image.jpeg', 'wb') as ofd:
+            ofd.write(base64.b64decode(jpgdata))
+            
+        with open(out_dir + '/catalog.ecsv', 'w') as ofd:
+            ofd.write(asciicat)
+        
         return prod_list
 
     def process_product_method(self, instrument, prod_list, api=False):
@@ -378,12 +389,6 @@ class GWImageQuery(ProductQuery):
         else:
             image  = prod_list.prod_list[1]
             catalog = prod_list.prod_list[0]
-            # prod.write() TODO: writing fits file(s)
-            with open('image.jpeg', 'wb') as ofd:
-                ofd.write(base64.b64decode(image))
-            
-            with open('catalog.ecsv', 'w') as ofd:
-                ofd.write(catalog)
             
             script = ''
             div = f'<img src="data:image/jpeg;base64,{image}">'
