@@ -76,7 +76,9 @@ class GWSpectrogramQuery(ProductQuery):
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           qmin = instrument.get_par_by_name('qmin').value,
-                          qmax = instrument.get_par_by_name('qmax').value)
+                          qmax = instrument.get_par_by_name('qmax').value,
+                                            _async_request="yes") # NOTE: testing async
+        
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
@@ -86,7 +88,7 @@ class GWSpectrogramQuery(ProductQuery):
         prod_list = []
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()
+        _o_dict = res.json()['data']  # NOTE: with data key only for async mode
         sgram = Spectrogram(_o_dict['output']['value'],
                             unit = 's',
                             t0 = _o_dict['output']['x0'],
@@ -404,9 +406,9 @@ class GWImageQuery(ProductQuery):
 
             query_out = QueryOutput()
             query_out.prod_dictionary['name'] = 'image'
-            query_out.prod_dictionary['file_name'] = ['catalog.ecsv', 'image.jpeg'] # TODO: fits instead of png
+            query_out.prod_dictionary['file_name'] = ['catalog.ecsv', 'image.jpeg'] # TODO: fits instead of image
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_image.tar.gz' # FIXME: download doesn't work properly
+            query_out.prod_dictionary['download_file_name'] = 'gw_image.tar.gz' 
             query_out.prod_dictionary['prod_process_message'] = ''
             
             catalog_table = aread(catalog)

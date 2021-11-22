@@ -19,7 +19,7 @@ def gw_factory():
                       src_query=src_query,
                       instrumet_query=instr_query,
                       data_serve_conf_file=conf_file,
-                      asynch=False, #TODO: should really be true
+                      asynch=True, 
                       product_queries_list=[gw_spec_query, gw_strain_query, gw_image_query],
                       data_server_query_class=GWDispatcher,
                       query_dictionary=query_dictionary)

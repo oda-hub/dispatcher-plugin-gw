@@ -84,11 +84,11 @@ class GWDispatcher:
     
 
     def run_query(self,
-                  call_back_url=None,
-                  run_asynch = False, #TODO: it should really be True in most cases. To test
-                  logger=None,
+                  call_back_url = None,
+                  run_asynch = True,
+                  logger = None,
                   task = None,
-                  param_dict=None):
+                  param_dict = None):
         
         res = None
         message = ''
@@ -105,6 +105,11 @@ class GWDispatcher:
         res = requests.get("%s" % (url), params = param_dict)
         if res.status_code == 200:
             query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+        elif res.status_code == 201:
+            if res.json()['workflow_status'] == 'submitted':
+                query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='submitted')
+            else:
+                query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='progress')
         else:
             query_out.set_failed('Error in the backend', message='connection status code: ' + str(res.status_code))
             raise RuntimeError('Error in the backend')
