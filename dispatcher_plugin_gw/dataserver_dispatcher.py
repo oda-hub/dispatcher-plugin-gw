@@ -100,6 +100,10 @@ class GWDispatcher:
 
         if param_dict is None:
             param_dict=self.param_dict   
+        
+        if run_asynch:
+            param_dict['_async_request_callback'] = call_back_url
+            param_dict['_async_request'] = "yes"
 
         url = "%s/%s" % (self.data_server_url, task)
         res = requests.get("%s" % (url), params = param_dict)
