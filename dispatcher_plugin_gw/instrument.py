@@ -1,7 +1,10 @@
-from .dataserver_dispatcher import GWDispatcher
 from cdci_data_analysis.analysis.instrument import Instrument
-from .queries import GWSourceQuery, GWInstrumentQuery, GWSpectrogramQuery, GWStrainQuery, GWSkymapQuery
+
 from . import conf_file
+from .dataserver_dispatcher import GWDispatcher
+from .queries import (GWInstrumentQuery, GWSkymapQuery, GWSourceQuery,
+                      GWSpectrogramQuery, GWStrainQuery)
+
 
 def gw_factory():
     src_query = GWSourceQuery('src_query')

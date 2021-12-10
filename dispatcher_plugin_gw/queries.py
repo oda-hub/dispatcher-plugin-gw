@@ -1,20 +1,13 @@
-import os
-from astropy.io import fits
-
-import numpy as np
-from astropy.io.ascii import read as aread
-from cdci_data_analysis.analysis.catalog import BasicCatalog
-from cdci_data_analysis.analysis.parameters import (Angle, Float, Integer, Name,
+from cdci_data_analysis.analysis.parameters import (Angle, Integer, Name,
                                                     Parameter, ParameterRange,
                                                     Time)
-from cdci_data_analysis.analysis.products import CatalogProduct, QueryOutput
+from cdci_data_analysis.analysis.products import QueryOutput
 from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
 from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
 
-from .products import SpectrogramProduct, StrainProduct
+from .products import SkymapProduct, SpectrogramProduct, StrainProduct
 
-import json
 
 class Boolean(Parameter):
     def __init__(self, value=None, name=None):
@@ -231,31 +224,10 @@ class GWSkymapQuery(ProductQuery):
         else:
             _o_dict = res.json()['data']
         asciicat = _o_dict['output']['asciicat']
-        jpgdata = _o_dict['output']['image']
+        imagedata = _o_dict['output']['image']
         fits_data = _o_dict['output']['skymap_files']
         
-        skymaps = {}
-        for event in fits_data.keys():
-            head = fits.Header.fromstring(fits_data[event]['header'])
-            data = np.array(json.loads(fits_data[event]['data']))
-            
-            columns = []
-            for i in range(head['TFIELDS']):
-                columns.append(fits.Column(array = data[:,i], 
-                                           name=head[f'TTYPE{i+1}'], 
-                                           format=head[f'TFORM{i+1}'], 
-                                           unit=head.get(f'TUNIT{i+1}', None)
-                                           )
-                               )
-                
-            hdu = fits.BinTableHDU.from_columns(columns, head)
-            skymaps[event] = hdu
-            hdu.writeto(os.path.join(out_dir, f'{event}_skymap.fits'))
-            
-        with open(os.path.join(out_dir, 'catalog.ecsv'), 'w') as ofd:
-            ofd.write(asciicat)
-        
-        prod_list = [asciicat, jpgdata, skymaps]
+        prod_list = [SkymapProduct(asciicat, imagedata, fits_data, out_dir)]
        
         return prod_list
 
@@ -263,12 +235,9 @@ class GWSkymapQuery(ProductQuery):
         if api is True:
             raise NotImplementedError
         else:
-            image  = prod_list.prod_list[1]
-            catalog = prod_list.prod_list[0]
-            skymaps = prod_list.prod_list[2]
+            skymap = prod_list.prod_list[0]
             
-            script = ''
-            div = f'<img src="data:image/svg+xml;base64,{image}">'
+            script, div = skymap.get_plot()
             
             html_dict = {}
             html_dict['script'] = script
@@ -281,32 +250,11 @@ class GWSkymapQuery(ProductQuery):
 
             query_out = QueryOutput()
             query_out.prod_dictionary['name'] = 'image'
-            query_out.prod_dictionary['file_name'] = ['catalog.ecsv'] + [f'{x}_skymap.fits' for x in skymaps.keys()]
+            query_out.prod_dictionary['file_name'] = skymap.write()
             query_out.prod_dictionary['image'] = plot_dict
             query_out.prod_dictionary['download_file_name'] = 'gw_skymap.tar.gz' 
             query_out.prod_dictionary['prod_process_message'] = ''
-            
-            catalog_table = aread(catalog)
-            
-            with_err  = [x[:-6] for x in catalog_table.columns if 'lower' in x]
-            for col in with_err:
-                val = catalog_table[col].astype('str')
-                low = catalog_table[col+'_lower'].astype('str')
-                upp = catalog_table[col+'_upper'].astype('str')
-                catalog_table.remove_columns([col, col+'_lower', col+'_upper'])    
-                catalog_table.add_column([f'{val[i]}+{upp[i]}{low[i]}' for i in range(len(val))], name=col)
-            
-            catalog_table.add_column(np.arange(len(catalog_table)), name='index', index=0)
-            
-            column_lists=[catalog_table[name].tolist() for name in catalog_table.colnames]
-            for ID,_col in enumerate(column_lists):
-                column_lists[ID] = [x if str(x)!='nan' else None for x in _col]
 
-            catalog_dict = dict(cat_column_list=column_lists,
-                    cat_column_names=catalog_table.colnames,
-                    cat_column_descr=catalog_table.dtype.descr,
-                    )
-
-            query_out.prod_dictionary['catalog'] = catalog_dict
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict()
 
         return query_out

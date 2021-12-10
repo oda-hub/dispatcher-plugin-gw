@@ -1,7 +1,9 @@
+import time
+
+import requests
 from cdci_data_analysis.analysis.products import QueryOutput
 from cdci_data_analysis.configurer import DataServerConf
-import requests
-import time
+
 
 class GWDispatcher:
     def __init__(self, instrument=None, param_dict=None, task=None, config=None):

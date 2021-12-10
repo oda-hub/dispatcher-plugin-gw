@@ -1,12 +1,17 @@
+import json
 import os
+
 import h5py
 import numpy as np
+from astropy.io import fits
+from astropy.io.ascii import read as aread
 from bokeh.embed import components
 from bokeh.layouts import column, row, widgetbox
 from bokeh.models import (ColorBar, CustomJS, HoverTool, LinearColorMapper,
                           Slider)
 from bokeh.plotting import figure
 from gwpy.time import from_gps
+
 
 class SpectrogramProduct:
     def __init__(self, sgram, out_dir=None):
@@ -21,22 +26,6 @@ class SpectrogramProduct:
             dset.attrs['yindex'] = self.sgram.yindex
     
     def get_spectrogram_plot(self):
-        
-        # simple mpl plot, using spectrogram with logf=False in backend 
-        # import io
-        # import base64
-        # plot = self.sgram.plot(dpi=60)
-        # ax = plot.gca()
-        # plot.colorbar(label="Normalised energy")
-        # ax.grid(False)
-        # ax.set_yscale('log')
-        # bio = io.BytesIO()
-        # plot.savefig(bio, format='jpg')
-        # bio.seek(0)
-        # jpgdata = base64.b64encode(bio.read())
-        # script = ''
-        # div = f'<img src="data:image/jpeg;base64,{jpgdata.decode()}">'
-        
         evt = from_gps(self.sgram.x0.value)
         
         #TODO: almost copy of cdci_data_analysis.analysis.plot_tools.Image
@@ -172,3 +161,64 @@ class StrainProduct:
         script, div = components(layout)
 
         return script, div
+
+class SkymapProduct:
+    def __init__(self, asciicat, imagedata, fitsdata, out_dir=None):
+        self.asciicat = asciicat
+        self.imagedata = imagedata
+        self.fits_data = fitsdata
+        self.out_dir = out_dir if out_dir is not None else '.' 
+        
+    def write(self):
+        skymaps = {}
+        for event in self.fits_data.keys():
+            head = fits.Header.fromstring(self.fits_data[event]['header'])
+            data = np.array(json.loads(self.fits_data[event]['data']))
+            
+            columns = []
+            for i in range(head['TFIELDS']):
+                columns.append(fits.Column(array = data[:,i], 
+                                           name=head[f'TTYPE{i+1}'], 
+                                           format=head[f'TFORM{i+1}'], 
+                                           unit=head.get(f'TUNIT{i+1}', None)
+                                           )
+                               )
+                
+            hdu = fits.BinTableHDU.from_columns(columns, head)
+            skymaps[event] = hdu
+            hdu.writeto(os.path.join(self.out_dir, f'{event}_skymap.fits'))
+        
+        with open(os.path.join(self.out_dir, 'catalog.ecsv'), 'w') as ofd:
+            ofd.write(self.asciicat)
+        
+        return ['catalog.ecsv'] + [f'{x}_skymap.fits' for x in skymaps.keys()]
+
+    
+    def get_plot(self):
+        script = ''
+        div = f'<img src="data:image/svg+xml;base64,{self.imagedata}">'
+        return script, div
+    
+    def get_catalog_dict(self):
+        catalog_table = aread(self.asciicat)
+            
+        with_err  = [x[:-6] for x in catalog_table.columns if 'lower' in x]
+        for col in with_err:
+            val = catalog_table[col].astype('str')
+            low = catalog_table[col+'_lower'].astype('str')
+            upp = catalog_table[col+'_upper'].astype('str')
+            catalog_table.remove_columns([col, col+'_lower', col+'_upper'])    
+            catalog_table.add_column([f'{val[i]}+{upp[i]}{low[i]}' for i in range(len(val))], name=col)
+        
+        catalog_table.add_column(np.arange(len(catalog_table)), name='index', index=0)
+        
+        column_lists=[catalog_table[name].tolist() for name in catalog_table.colnames]
+        for ID,_col in enumerate(column_lists):
+            column_lists[ID] = [x if str(x)!='nan' else None for x in _col]
+
+        catalog_dict = dict(cat_column_list=column_lists,
+                cat_column_names=catalog_table.colnames,
+                cat_column_descr=catalog_table.dtype.descr,
+                )
+        return catalog_dict
+    
