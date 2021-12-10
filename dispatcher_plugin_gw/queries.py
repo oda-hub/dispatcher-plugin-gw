@@ -187,9 +187,9 @@ class GWStrainQuery(ProductQuery):
 
             query_out = QueryOutput()
             query_out.prod_dictionary['name'] = 'strain'
-            query_out.prod_dictionary['file_name'] = 'strain.h5'
+            query_out.prod_dictionary['file_name'] = ['strain.h5', 'strain_bandpassed.h5']
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_strain.h5'
+            query_out.prod_dictionary['download_file_name'] = 'gw_strain.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
 
         return query_out
