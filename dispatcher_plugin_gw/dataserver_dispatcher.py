@@ -51,6 +51,10 @@ class GWDispatcher:
     
 
     def test_has_input_products(self, instrument, logger=None):
+        query_out = QueryOutput()
+        query_out.set_done('input products check skipped')
+        return query_out, []
+    
         print('--> test for data availability')
 
         query_out = QueryOutput()
@@ -114,8 +118,10 @@ class GWDispatcher:
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='submitted')
             else:
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='progress')
+                #this anyway finally sets "submitted", the only status implemented now in "non-integral" dispatcher code
         else:
             query_out.set_failed('Error in the backend', message='connection status code: ' + str(res.status_code))
+            # TODO: we can get the exception message from backend
             raise RuntimeError('Error in the backend')
 
         return res, query_out

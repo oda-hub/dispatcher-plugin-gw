@@ -1,9 +1,10 @@
-import base64
+import os
+from astropy.io import fits
 
 import numpy as np
 from astropy.io.ascii import read as aread
 from cdci_data_analysis.analysis.catalog import BasicCatalog
-from cdci_data_analysis.analysis.parameters import (Float, Integer, Name,
+from cdci_data_analysis.analysis.parameters import (Angle, Float, Integer, Name,
                                                     Parameter, ParameterRange,
                                                     Time)
 from cdci_data_analysis.analysis.products import CatalogProduct, QueryOutput
@@ -13,6 +14,7 @@ from gwpy.timeseries.timeseries import TimeSeries
 
 from .products import SpectrogramProduct, StrainProduct
 
+import json
 
 class Boolean(Parameter):
     def __init__(self, value=None, name=None):
@@ -86,7 +88,10 @@ class GWSpectrogramQuery(ProductQuery):
         prod_list = []
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()['data']  # NOTE: with data key only for async mode
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
+        else:
+            _o_dict = res.json()['data']
         sgram = Spectrogram(_o_dict['output']['value'],
                             unit = 's',
                             t0 = _o_dict['output']['x0'],
@@ -148,7 +153,10 @@ class GWStrainQuery(ProductQuery):
         prod_list = []
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
+        else:
+            _o_dict = res.json()['data']
         ori_strain = TimeSeries(_o_dict['output']['ori_strain'],
                                 t0 = _o_dict['output']['t0'],
                                 dt = _o_dict['output']['dt'])
@@ -191,33 +199,64 @@ class GWStrainQuery(ProductQuery):
     
 class GWSkymapQuery(ProductQuery):
     def __init__(self, name):
-        super().__init__(name, [])
+        do_cone_search = Boolean(True, name='do_cone_search')
+        ra = Angle(value = 0., units='deg', name='RA')
+        dec = Angle(value = 0, units='deg', name='DEC')
+        radius = Angle(value = 0., units='deg', name='radius')
+        level_threshold = Integer(10, name='level_threshold')
+        contour_levels = Name('50,90', name='contour_levels')
+        parameter_list = [do_cone_search, ra, dec, radius, level_threshold, contour_levels]
+        super().__init__(name, parameter_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
         param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value)
+                          t2 = instrument.get_par_by_name('T2').value,
+                          do_cone_search = instrument.get_par_by_name('do_cone_search').value,
+                          ra = instrument.get_par_by_name('RA').value, 
+                          dec = instrument.get_par_by_name('DEC').value, 
+                          radius = instrument.get_par_by_name('radius').value, 
+                          level_threshold = instrument.get_par_by_name('level_threshold').value, 
+                          contour_levels = instrument.get_par_by_name('contour_levels').value, 
+                          )
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
-                                                  task='/api/v1.0/get/events')
+                                                  task='/api/v1.0/get/conesearch')
 
     def build_product_list(self, instrument, res, out_dir, api=False):
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
+        else:
+            _o_dict = res.json()['data']
         asciicat = _o_dict['output']['asciicat']
-        jpgdata = _o_dict['output']['jpgdata']
+        jpgdata = _o_dict['output']['image']
+        fits_data = _o_dict['output']['skymap_files']
         
-        prod_list = [asciicat, jpgdata]
-        
-        # TODO: prepare proper fits file
-        
-        with open(out_dir + '/image.jpeg', 'wb') as ofd:
-            ofd.write(base64.b64decode(jpgdata))
+        skymaps = {}
+        for event in fits_data.keys():
+            head = fits.Header.fromstring(fits_data[event]['header'])
+            data = np.array(json.loads(fits_data[event]['data']))
             
-        with open(out_dir + '/catalog.ecsv', 'w') as ofd:
+            columns = []
+            for i in range(head['TFIELDS']):
+                columns.append(fits.Column(array = data[:,i], 
+                                           name=head[f'TTYPE{i+1}'], 
+                                           format=head[f'TFORM{i+1}'], 
+                                           unit=head.get(f'TUNIT{i+1}', None)
+                                           )
+                               )
+                
+            hdu = fits.BinTableHDU.from_columns(columns, head)
+            skymaps[event] = hdu
+            hdu.writeto(os.path.join(out_dir, f'{event}_skymap.fits'))
+            
+        with open(os.path.join(out_dir, 'catalog.ecsv'), 'w') as ofd:
             ofd.write(asciicat)
         
+        prod_list = [asciicat, jpgdata, skymaps]
+       
         return prod_list
 
     def process_product_method(self, instrument, prod_list, api=False):
@@ -226,9 +265,10 @@ class GWSkymapQuery(ProductQuery):
         else:
             image  = prod_list.prod_list[1]
             catalog = prod_list.prod_list[0]
+            skymaps = prod_list.prod_list[2]
             
             script = ''
-            div = f'<img src="data:image/jpeg;base64,{image}">'
+            div = f'<img src="data:image/svg+xml;base64,{image}">'
             
             html_dict = {}
             html_dict['script'] = script
@@ -241,12 +281,21 @@ class GWSkymapQuery(ProductQuery):
 
             query_out = QueryOutput()
             query_out.prod_dictionary['name'] = 'image'
-            query_out.prod_dictionary['file_name'] = ['catalog.ecsv', 'image.jpeg'] # TODO: fits instead of image
+            query_out.prod_dictionary['file_name'] = ['catalog.ecsv'] + [f'{x}_skymap.fits' for x in skymaps.keys()]
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_image.tar.gz' 
+            query_out.prod_dictionary['download_file_name'] = 'gw_skymap.tar.gz' 
             query_out.prod_dictionary['prod_process_message'] = ''
             
             catalog_table = aread(catalog)
+            
+            with_err  = [x[:-6] for x in catalog_table.columns if 'lower' in x]
+            for col in with_err:
+                val = catalog_table[col].astype('str')
+                low = catalog_table[col+'_lower'].astype('str')
+                upp = catalog_table[col+'_upper'].astype('str')
+                catalog_table.remove_columns([col, col+'_lower', col+'_upper'])    
+                catalog_table.add_column([f'{val[i]}+{upp[i]}{low[i]}' for i in range(len(val))], name=col)
+            
             catalog_table.add_column(np.arange(len(catalog_table)), name='index', index=0)
             
             column_lists=[catalog_table[name].tolist() for name in catalog_table.colnames]
@@ -257,7 +306,7 @@ class GWSkymapQuery(ProductQuery):
                     cat_column_names=catalog_table.colnames,
                     cat_column_descr=catalog_table.dtype.descr,
                     )
-            
+
             query_out.prod_dictionary['catalog'] = catalog_dict
 
         return query_out

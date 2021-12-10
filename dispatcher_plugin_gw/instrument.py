@@ -13,7 +13,7 @@ def gw_factory():
     query_dictionary = {}
     query_dictionary['gw_spectrogram'] = 'gw_spectrogram_query'
     query_dictionary['gw_strain'] = 'gw_strain_query'
-    query_dictionary['gw_skymap'] = 'gw_skymap_query'
+    query_dictionary['gw_skymap_image'] = 'gw_skymap_query'
 
     return Instrument('gw', 
                       src_query=src_query,

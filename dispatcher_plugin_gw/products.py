@@ -1,4 +1,3 @@
-
 import h5py
 import numpy as np
 from bokeh.embed import components
@@ -7,7 +6,6 @@ from bokeh.models import (ColorBar, CustomJS, HoverTool, LinearColorMapper,
                           Slider)
 from bokeh.plotting import figure
 from gwpy.time import from_gps
-
 
 class SpectrogramProduct:
     def __init__(self, sgram, out_dir=None):
