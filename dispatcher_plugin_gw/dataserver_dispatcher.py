@@ -112,6 +112,11 @@ class GWDispatcher:
         url = "%s/%s" % (self.data_server_url, task)
         res = requests.get("%s" % (url), params = param_dict)
         if res.status_code == 200:
+            if res.json()['data']['exceptions']: #failed nb execution in async 
+                except_message = res.json()['data']['exceptions'][0]['ename']+': '+res.json()['data']['exceptions'][0]['evalue']
+                query_out.set_failed('Processing failed', 
+                                     message=except_message)
+                raise RuntimeError(f'Processing failed. {except_message}')
             query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
         elif res.status_code == 201:
             if res.json()['workflow_status'] == 'submitted':
@@ -120,8 +125,9 @@ class GWDispatcher:
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='progress')
                 #this anyway finally sets "submitted", the only status implemented now in "non-integral" dispatcher code
         else:
-            query_out.set_failed('Error in the backend', message='connection status code: ' + str(res.status_code))
-            # TODO: we can get the exception message from backend
+            query_out.set_failed('Error in the backend', 
+                                 message='connection status code: ' + str(res.status_code), 
+                                 extra_message=res.json()['exceptions'][0])
             raise RuntimeError('Error in the backend')
 
         return res, query_out
