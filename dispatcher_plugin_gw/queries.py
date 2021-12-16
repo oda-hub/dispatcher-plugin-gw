@@ -1,15 +1,13 @@
-import numpy as np
-from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
-from cdci_data_analysis.analysis.parameters import Float, Integer, Time, ParameterRange, Name, Parameter
+from cdci_data_analysis.analysis.parameters import (Angle, Integer, Name,
+                                                    Parameter, ParameterRange,
+                                                    Time)
 from cdci_data_analysis.analysis.products import QueryOutput
+from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
 from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
-import h5py
-from bokeh.plotting import figure
-from bokeh.models import ColorBar, LinearColorMapper, HoverTool, CustomJS, Slider 
-from bokeh.embed import components
-from bokeh.layouts import row, widgetbox, column
-from gwpy.time import from_gps
+
+from .products import SkymapProduct, SpectrogramProduct, StrainProduct
+
 
 class Boolean(Parameter):
     def __init__(self, value=None, name=None):
@@ -71,7 +69,9 @@ class GWSpectrogramQuery(ProductQuery):
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           qmin = instrument.get_par_by_name('qmin').value,
-                          qmax = instrument.get_par_by_name('qmax').value)
+                          qmax = instrument.get_par_by_name('qmax').value,
+                         ) 
+        
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
@@ -81,7 +81,10 @@ class GWSpectrogramQuery(ProductQuery):
         prod_list = []
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
+        else:
+            _o_dict = res.json()['data']
         sgram = Spectrogram(_o_dict['output']['value'],
                             unit = 's',
                             t0 = _o_dict['output']['x0'],
@@ -117,119 +120,7 @@ class GWSpectrogramQuery(ProductQuery):
         return query_out
 
 
-class SpectrogramProduct:
-    def __init__(self, sgram, out_dir=None):
-        self.sgram = sgram
-        self.out_dir = out_dir
-
-    def write(self):
-        with h5py.File(self.out_dir + '/spectrogram.h5', 'w') as fd:
-            dset = fd.create_dataset('sgram', data=self.sgram.value)
-            dset.attrs['x0'] = self.sgram.x0
-            dset.attrs['dx'] = self.sgram.dx
-            dset.attrs['yindex'] = self.sgram.yindex
-    
-    def get_spectrogram_plot(self):
-        
-        # simple mpl plot, using spectrogram with logf=False in backend 
-        # import io
-        # import base64
-        # plot = self.sgram.plot(dpi=60)
-        # ax = plot.gca()
-        # plot.colorbar(label="Normalised energy")
-        # ax.grid(False)
-        # ax.set_yscale('log')
-        # bio = io.BytesIO()
-        # plot.savefig(bio, format='jpg')
-        # bio.seek(0)
-        # jpgdata = base64.b64encode(bio.read())
-        # script = ''
-        # div = f'<img src="data:image/jpeg;base64,{jpgdata.decode()}">'
-        
-        evt = from_gps(self.sgram.x0.value)
-        
-        #TODO: almost copy of cdci_data_analysis.analysis.plot_tools.Image
-        #      would be better to implement needed functionality (axes titles etc.) there
-        
-        fig = figure(tools=['pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
-                   y_axis_type="log", 
-                   y_range=(self.sgram.yindex[0].value, self.sgram.yindex[-1].value), 
-                   x_range=(0, self.sgram.dx.value * len(self.sgram.xindex)),
-                   plot_height=350,
-                   plot_width=650,
-                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                    self.sgram.x0.value),
-                   y_axis_label = 'Frequency [Hz]')
-
-        min_s = self.sgram.min().value
-        max_s = self.sgram.max().value
-        
-        color_mapper = LinearColorMapper(palette='Plasma256', 
-                                      low=min_s,
-                                      high=max_s)
-
-        fig_im = fig.image(image=[self.sgram.T], 
-                           x=0, 
-                           y=self.sgram.yindex[0].value, 
-                           dw=self.sgram.dx.value * len(self.sgram.xindex), 
-                           dh=self.sgram.yindex[-1].value-self.sgram.yindex[0].value, 
-                           color_mapper=color_mapper)
-        
-        hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")],
-                          renderers=[fig_im])
-        
-        fig.add_tools(hover)
-        
-        color_bar = ColorBar(color_mapper=color_mapper, 
-                             label_standoff=5, 
-                             location=(0,0),
-                             width=10)
-        
-        JS_code_slider = """
-                   var vmin = low_slider.value;
-                   var vmax = high_slider.value;
-                   fig_im.glyph.color_mapper.high = vmax;
-                   fig_im.glyph.color_mapper.low = vmin;
-               """
-
-        callback = CustomJS(args=dict(fig_im=fig_im), code=JS_code_slider)
-
-        self.graph_min_slider = Slider(title="Norm. En. Min", 
-                                       start=min_s, 
-                                       end=max_s, 
-                                       step=1, 
-                                       value=min_s, 
-                                       callback=callback,
-                                       width=150)
-        self.graph_max_slider = Slider(title="Norm. En. Max", 
-                                       start=min_s, 
-                                       end=max_s, 
-                                       step=1, 
-                                       value=0.8 * max_s, 
-                                       callback=callback,
-                                       width=150)
-
-        self.graph_min_slider.on_change('value', self.change_image_contrast)
-        self.graph_max_slider.on_change('value', self.change_image_contrast)
-
-        callback.args["low_slider"] = self.graph_min_slider
-        callback.args["high_slider"] = self.graph_max_slider
-
-        fig.add_layout(color_bar, 'right')
-
-        layout = row(
-            fig, widgetbox(self.graph_min_slider, 
-                           self.graph_max_slider, 
-                          ),
-        )
-
-        script, div = components(layout)
-
-        return script, div
-
-    def change_image_contrast(self, attr, old, new):
-        self.fig_im.glyph.color_mapper.update(low=self.graph_min_slider.value, high=self.graph_max_slider.value)
-        
+      
         
 class GWStrainQuery(ProductQuery):
     def __init__(self, name):
@@ -255,7 +146,10 @@ class GWStrainQuery(ProductQuery):
         prod_list = []
         if out_dir is None:
             out_dir = './'
-        _o_dict = res.json()
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
+        else:
+            _o_dict = res.json()['data']
         ori_strain = TimeSeries(_o_dict['output']['ori_strain'],
                                 t0 = _o_dict['output']['t0'],
                                 dt = _o_dict['output']['dt'])
@@ -286,62 +180,81 @@ class GWStrainQuery(ProductQuery):
 
             query_out = QueryOutput()
             query_out.prod_dictionary['name'] = 'strain'
-            query_out.prod_dictionary['file_name'] = 'strain.h5'
+            query_out.prod_dictionary['file_name'] = ['strain.h5', 'strain_bandpassed.h5']
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_strain.h5'
+            query_out.prod_dictionary['download_file_name'] = 'gw_strain.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
 
         return query_out
 
 
-class StrainProduct:
-    def __init__(self, ori_strain, filt_strain=None, out_dir=None):
-        self.ori_strain = ori_strain
-        self.filt_strain = filt_strain
-        self.out_dir = out_dir
-
-    def write(self):
-        with h5py.File(self.out_dir + '/strain.h5', 'w') as fd:
-            dset = fd.create_dataset('ori_strain', data=self.ori_strain.value)
-            dset.attrs['t0'] = self.ori_strain.t0
-            dset.attrs['dx'] = self.ori_strain.dt
-            if self.filt_strain is not None:
-                dset1 = fd.create_dataset('filt_strain', data=self.filt_strain.value)
-                dset1.attrs['t0'] = self.filt_strain.t0
-                dset1.attrs['dx'] = self.filt_strain.dt
     
-    def get_strains_plot(self):
-        
-        evt = from_gps(self.ori_strain.t0.value)
-        times = np.arange(0, 
-                          self.ori_strain.dt.value * len(self.ori_strain) + 1,
-                          self.ori_strain.dt.value )
-       
-        hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
-                          
-        fig = figure(tools=[hover, 'pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
-                   plot_height=250,
-                   plot_width=700,
-                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                    self.ori_strain.t0.value),
-                   )
-        ln = fig.line(times, self.ori_strain.value, line_color='blue')
+    
+class GWSkymapQuery(ProductQuery):
+    def __init__(self, name):
+        do_cone_search = Boolean(True, name='do_cone_search')
+        ra = Angle(value = 0., units='deg', name='RA')
+        dec = Angle(value = 0, units='deg', name='DEC')
+        radius = Angle(value = 0., units='deg', name='radius')
+        level_threshold = Integer(10, name='level_threshold')
+        contour_levels = Name('50,90', name='contour_levels')
+        parameter_list = [do_cone_search, ra, dec, radius, level_threshold, contour_levels]
+        super().__init__(name, parameter_list)
 
-        if self.filt_strain is not None:
-            hover1 = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
-                          
-            fig1 = figure(tools=[hover, 'pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
-                    plot_height=250,
-                    plot_width=700,
-                    x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                        self.ori_strain.t0.value),
-                    )
-            ln1 = fig1.line(times, self.filt_strain.value, line_color='blue')
+    def get_data_server_query(self, instrument, config, **kwargs):
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
+                          t2 = instrument.get_par_by_name('T2').value,
+                          do_cone_search = instrument.get_par_by_name('do_cone_search').value,
+                          ra = instrument.get_par_by_name('RA').value, 
+                          dec = instrument.get_par_by_name('DEC').value, 
+                          radius = instrument.get_par_by_name('radius').value, 
+                          level_threshold = instrument.get_par_by_name('level_threshold').value, 
+                          contour_levels = instrument.get_par_by_name('contour_levels').value, 
+                          )
+        return instrument.data_server_query_class(instrument=instrument,
+                                                  config=config,
+                                                  param_dict=param_dict,
+                                                  task='/api/v1.0/get/conesearch')
 
-            layout = column(fig, fig1)
+    def build_product_list(self, instrument, res, out_dir, api=False):
+        if out_dir is None:
+            out_dir = './'
+        if 'output' in res.json().keys(): # in synchronous mode
+            _o_dict = res.json() 
         else:
-            layout = fig
+            _o_dict = res.json()['data']
+        asciicat = _o_dict['output']['asciicat']
+        imagedata = _o_dict['output']['image']
+        fits_data = _o_dict['output']['skymap_files']
+        
+        prod_list = [SkymapProduct(asciicat, imagedata, fits_data, out_dir)]
+       
+        return prod_list
 
-        script, div = components(layout)
+    def process_product_method(self, instrument, prod_list, api=False):
+        if api is True:
+            raise NotImplementedError
+        else:
+            skymap = prod_list.prod_list[0]
+            
+            script, div = skymap.get_plot()
+            
+            html_dict = {}
+            html_dict['script'] = script
+            html_dict['div'] = div
+            plot_dict = {}
+            plot_dict['image'] = html_dict
+            plot_dict['header_text'] = ''
+            plot_dict['table_text'] = ''
+            plot_dict['footer_text'] = ''
 
-        return script, div
+            query_out = QueryOutput()
+            query_out.prod_dictionary['name'] = 'image'
+            query_out.prod_dictionary['file_name'] = skymap.write()
+            query_out.prod_dictionary['image'] = plot_dict
+            query_out.prod_dictionary['download_file_name'] = 'gw_skymap.tar.gz' 
+            query_out.prod_dictionary['prod_process_message'] = ''
+
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict()
+
+        return query_out

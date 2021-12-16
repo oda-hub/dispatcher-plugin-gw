@@ -1,7 +1,9 @@
+import time
+
+import requests
 from cdci_data_analysis.analysis.products import QueryOutput
 from cdci_data_analysis.configurer import DataServerConf
-import requests
-import time
+
 
 class GWDispatcher:
     def __init__(self, instrument=None, param_dict=None, task=None, config=None):
@@ -51,6 +53,10 @@ class GWDispatcher:
     
 
     def test_has_input_products(self, instrument, logger=None):
+        query_out = QueryOutput()
+        query_out.set_done('input products check skipped')
+        return query_out, []
+    
         print('--> test for data availability')
 
         query_out = QueryOutput()
@@ -68,7 +74,7 @@ class GWDispatcher:
         if res.status_code == 200:
             _o_dict = res.json()
             if _o_dict['output']['ok_flag'] is True:
-                streaks.append(1) # dummy
+                #streaks.append(1) # dummy
                 query_out.set_done('streak data available')
             else:
                 query_out.set_failed('no data available')                
@@ -84,11 +90,11 @@ class GWDispatcher:
     
 
     def run_query(self,
-                  call_back_url=None,
-                  run_asynch = False, #TODO: it should really be True in most cases. To test
-                  logger=None,
+                  call_back_url = None,
+                  run_asynch = True,
+                  logger = None,
                   task = None,
-                  param_dict=None):
+                  param_dict = None):
         
         res = None
         message = ''
@@ -100,10 +106,30 @@ class GWDispatcher:
 
         if param_dict is None:
             param_dict=self.param_dict   
+        
+        if run_asynch:
+            param_dict['_async_request_callback'] = call_back_url
+            param_dict['_async_request'] = "yes"
 
-        #TODO: handle fail
         url = "%s/%s" % (self.data_server_url, task)
         res = requests.get("%s" % (url), params = param_dict)
-        query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+        if res.status_code == 200:
+            if res.json()['data']['exceptions']: #failed nb execution in async 
+                except_message = res.json()['data']['exceptions'][0]['ename']+': '+res.json()['data']['exceptions'][0]['evalue']
+                query_out.set_failed('Processing failed', 
+                                     message=except_message)
+                raise RuntimeError(f'Processing failed. {except_message}')
+            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+        elif res.status_code == 201:
+            if res.json()['workflow_status'] == 'submitted':
+                query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='submitted')
+            else:
+                query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='progress')
+                #this anyway finally sets "submitted", the only status implemented now in "non-integral" dispatcher code
+        else:
+            query_out.set_failed('Error in the backend', 
+                                 message='connection status code: ' + str(res.status_code), 
+                                 extra_message=res.json()['exceptions'][0])
+            raise RuntimeError('Error in the backend')
 
         return res, query_out
