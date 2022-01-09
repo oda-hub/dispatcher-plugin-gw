@@ -18,6 +18,23 @@ class SpectrogramProduct:
         self.sgram = sgram
         self.out_dir = out_dir
 
+    def serialize(self):
+        try:
+            dy = self.sgram.dy.value
+        except AttributeError:
+            dy = 'none'
+            
+        return dict(
+            value = self.sgram.value.tolist(),
+            epoch = self.sgram.epoch.value,
+            x0 = self.sgram.x0.value,
+            dx = self.sgram.dx.value,
+            xindex = self.sgram.xindex.value.tolist(),
+            y0 = self.sgram.y0.value,
+            dy = dy,
+            yindex = self.sgram.yindex.value.tolist()
+        )
+        
     def write(self):
         with h5py.File(self.out_dir + '/spectrogram.h5', 'w') as fd:
             dset = fd.create_dataset('sgram', data=self.sgram.value)
@@ -116,9 +133,25 @@ class StrainProduct:
         self.filt_strain = filt_strain
         self.out_dir = out_dir
 
+    def serialize(self):
+        out_list = []
+        out_list.append({
+            'value': self.ori_strain.value,
+            't0': self.ori_strain.t0.value,
+            'dt': self.ori_strain.dt.value,
+            'name': 'Strain'
+            })
+        out_list.append({
+            'value': self.filt_strain.value,
+            't0': self.filt_strain.t0.value,
+            'dt': self.filt_strain.dt.value,
+            'name': 'Strain_bp'
+            })
+        return out_list
+    
     def write(self):
         self.ori_strain.name = 'Strain'
-        self.filt_strain.name = 'Strain'
+        self.filt_strain.name = 'Strain_bp'
         self.ori_strain.write(os.path.join(self.out_dir, 'strain.h5'), format='hdf5')  
         if self.filt_strain is not None:
             self.filt_strain.write(os.path.join(self.out_dir, 'strain_bandpassed.h5'), format='hdf5')  

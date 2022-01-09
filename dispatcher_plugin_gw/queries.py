@@ -96,7 +96,9 @@ class GWSpectrogramQuery(ProductQuery):
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            prod  = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_spectrogram_product'] = prod.serialize()
         else:
             prod  = prod_list.prod_list[0]
             prod.write()
@@ -164,7 +166,9 @@ class GWStrainQuery(ProductQuery):
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            prod  = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_strain_product_list'] = prod.serialize()
         else:
             prod  = prod_list.prod_list[0]
             prod.write()
