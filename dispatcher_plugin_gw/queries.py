@@ -19,7 +19,7 @@ class Boolean(Parameter):
 
     @property
     def value(self):
-        return self._value
+        return str(self._value).lower() #because passed in json
 
     @value.setter
     def value(self, v):
