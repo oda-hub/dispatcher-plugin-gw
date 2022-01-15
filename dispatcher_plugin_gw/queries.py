@@ -230,14 +230,23 @@ class GWSkymapQuery(ProductQuery):
         asciicat = _o_dict['output']['asciicat']
         imagedata = _o_dict['output']['image']
         fits_data = _o_dict['output']['skymap_files']
+        contours_data = _o_dict['output']['contours']
         
-        prod_list = [SkymapProduct(asciicat, imagedata, fits_data, out_dir)]
+        prod_list = [SkymapProduct(asciicat, 
+                                   imagedata, 
+                                   fits_data, 
+                                   contours_data, 
+                                   out_dir)]
        
         return prod_list
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            skymap = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_skymap_product'] = skymap.serialize()
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict(api=True) 
+            
         else:
             skymap = prod_list.prod_list[0]
             
@@ -259,6 +268,6 @@ class GWSkymapQuery(ProductQuery):
             query_out.prod_dictionary['download_file_name'] = 'gw_skymap.tar.gz' 
             query_out.prod_dictionary['prod_process_message'] = ''
 
-            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict()
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict(api=False)
 
         return query_out
