@@ -34,18 +34,18 @@ class Boolean(Parameter):
             self._value = True
         else:
             raise ValueError(f'Wrong value for parameter {self.name}')
-class GWSourceQuery(BaseQuery):
-    def __init__(self, name):
-        t1 = Time(value='2017-08-17T12:40:54', name='T1', Time_format_name='T_format')
-        t2 = Time(value='2017-08-17T12:41:10', name='T2', Time_format_name='T_format')
+# class GWSourceQuery(BaseQuery):
+#     def __init__(self, name):
+#         t1 = Time(value='2017-08-17T12:40:54', name='T1', Time_format_name='T_format')
+#         t2 = Time(value='2017-08-17T12:41:10', name='T2', Time_format_name='T_format')
 
-        t_range = ParameterRange(t1, t2, 'time')
+#         t_range = ParameterRange(t1, t2, 'time')
 
-        token = Name(name_format='str', name='token',value=None)
+#         token = Name(name_format='str', name='token',value=None)
 
-        param_list = [t_range, token]
+#         param_list = [t_range, token]
 
-        super().__init__(name, param_list)
+#         super().__init__(name, param_list)
 
 class GWInstrumentQuery(BaseQuery):
     def __init__(self, 
@@ -118,7 +118,6 @@ class GWSpectrogramQuery(ProductQuery):
             query_out.prod_dictionary['image'] = plot_dict
             query_out.prod_dictionary['download_file_name'] = 'gw_spectrogram.h5'
             query_out.prod_dictionary['prod_process_message'] = ''
-
         return query_out
 
 
@@ -188,7 +187,6 @@ class GWStrainQuery(ProductQuery):
             query_out.prod_dictionary['image'] = plot_dict
             query_out.prod_dictionary['download_file_name'] = 'gw_strain.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
-
         return query_out
 
 
@@ -197,12 +195,10 @@ class GWStrainQuery(ProductQuery):
 class GWSkymapQuery(ProductQuery):
     def __init__(self, name):
         do_cone_search = Boolean(True, name='do_cone_search')
-        ra = Angle(value = 0., units='deg', name='RA')
-        dec = Angle(value = 0, units='deg', name='DEC')
         radius = Angle(value = 0., units='deg', name='radius')
         level_threshold = Integer(10, name='level_threshold')
         contour_levels = Name('50,90', name='contour_levels')
-        parameter_list = [do_cone_search, ra, dec, radius, level_threshold, contour_levels]
+        parameter_list = [do_cone_search, radius, level_threshold, contour_levels]
         super().__init__(name, parameter_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):

@@ -1,4 +1,5 @@
 import time
+from xml.etree.ElementTree import Comment
 
 import requests
 from cdci_data_analysis.analysis.products import QueryOutput
@@ -119,7 +120,11 @@ class GWDispatcher:
                 query_out.set_failed('Processing failed', 
                                      message=except_message)
                 raise RuntimeError(f'Processing failed. {except_message}')
-            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+            if task.split('/')[-1] == 'conesearch' and param_dict['do_cone_search']:
+                comment = ''
+            else:
+                comment = 'Please note that RA and Dec parameters are not used.'
+            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done',comment=comment)
         elif res.status_code == 201:
             if res.json()['workflow_status'] == 'submitted':
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='submitted')
