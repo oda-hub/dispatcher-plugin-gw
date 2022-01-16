@@ -7,6 +7,14 @@ from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
 
 from .products import SkymapProduct, SpectrogramProduct, StrainProduct
+from astropy.time import Time as astropyTime
+
+def check_time_interval(T1, T2, maxinterval=60):
+    t1 = astropyTime(T1, format='isot')
+    t2 = astropyTime(T2, format='isot')
+    delta = t2 - t1
+    if delta.sec > maxinterval:
+        raise ValueError(f'Too long time interval. Current limit is {maxinterval}s')
 
 
 class Boolean(Parameter):
@@ -64,14 +72,14 @@ class GWSpectrogramQuery(ProductQuery):
                 super().__init__(name, parameters_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           qmin = instrument.get_par_by_name('qmin').value,
                           qmax = instrument.get_par_by_name('qmax').value,
                          ) 
-        
+        check_time_interval(param_dict['t1'], param_dict['t2'])
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
@@ -138,6 +146,7 @@ class GWStrainQuery(ProductQuery):
                           whiten = instrument.get_par_by_name('whiten').value,
                           fmin = instrument.get_par_by_name('fmin').value,
                           fmax = instrument.get_par_by_name('fmax').value)
+        check_time_interval(param_dict['t1'], param_dict['t2'])
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
