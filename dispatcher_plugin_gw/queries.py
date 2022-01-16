@@ -140,8 +140,8 @@ class GWStrainQuery(ProductQuery):
                 super().__init__(name, parameters_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           fmin = instrument.get_par_by_name('fmin').value,
@@ -211,8 +211,8 @@ class GWSkymapQuery(ProductQuery):
         super().__init__(name, parameter_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           do_cone_search = instrument.get_par_by_name('do_cone_search').value,
                           ra = instrument.get_par_by_name('RA').value, 
                           dec = instrument.get_par_by_name('DEC').value, 
