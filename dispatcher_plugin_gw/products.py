@@ -242,7 +242,8 @@ class SkymapProduct:
             dp = NumpyDataProduct(NumpyDataUnit.from_fits_hdu(hdu), name='skymap_'+event)
             skymaps[event] = dp.encode()
         _out['skymaps'] = skymaps
-        _out['contours'] = self.contours_dict
+        if self.contours_dict:
+            _out['contours'] = self.contours_dict
         
         return _out
         
@@ -253,7 +254,6 @@ class SkymapProduct:
         return script, div
     
     def get_catalog_dict(self, api=False):
-        #TODO: add metadata (tamerange etc)
         catalog_table = aread(self.asciicat)
         
         if not api:   
@@ -274,6 +274,7 @@ class SkymapProduct:
         catalog_dict = dict(cat_column_list=column_lists,
                 cat_column_names=catalog_table.colnames,
                 cat_column_descr=catalog_table.dtype.descr,
+                cat_meta = catalog_table.meta
                 )
         return catalog_dict
     

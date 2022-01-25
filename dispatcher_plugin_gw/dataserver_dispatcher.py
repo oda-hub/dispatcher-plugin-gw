@@ -1,5 +1,4 @@
 import time
-from xml.etree.ElementTree import Comment
 
 import requests
 from cdci_data_analysis.analysis.products import QueryOutput
