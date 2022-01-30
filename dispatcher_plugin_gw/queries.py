@@ -124,7 +124,7 @@ class GWSpectrogramQuery(ProductQuery):
             query_out.prod_dictionary['name'] = 'spectrogram'
             query_out.prod_dictionary['file_name'] = 'spectrogram.h5'
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_spectrogram.h5'
+            query_out.prod_dictionary['download_file_name'] = 'gw_spectrogram.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
         return query_out
 
