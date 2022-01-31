@@ -39,7 +39,7 @@ jobs:
 
     - name: PyLint - more lint
       run: |
-        pylint -E dispatcher_plugin_antares || echo 'this is fine!'
+        pylint -E dispatcher_plugin_gw || echo 'this is fine!'
 
     - name: MyPy
       run: |
