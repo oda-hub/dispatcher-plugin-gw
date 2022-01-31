@@ -137,7 +137,7 @@ class GWDispatcher:
             except:
                 query_out.set_failed('Error in the backend', 
                                  message='connection status code: ' + str(res.status_code), 
-                                )
+                                 extra_message = res.text)
             raise RuntimeError('Error in the backend')
 
         return res, query_out
