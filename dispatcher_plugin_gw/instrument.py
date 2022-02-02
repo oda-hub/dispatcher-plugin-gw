@@ -2,12 +2,13 @@ from cdci_data_analysis.analysis.instrument import Instrument
 
 from . import conf_file
 from .dataserver_dispatcher import GWDispatcher
-from .queries import (GWInstrumentQuery, GWSkymapQuery, GWSourceQuery,
+from .queries import (GWInstrumentQuery, GWSkymapQuery, 
                       GWSpectrogramQuery, GWStrainQuery)
+from cdci_data_analysis.analysis.queries import SourceQuery
 
 
 def gw_factory():
-    src_query = GWSourceQuery('src_query')
+    src_query = SourceQuery('src_query')
     instr_query = GWInstrumentQuery('instr_query')
     gw_spec_query = GWSpectrogramQuery('gw_spectrogram_query')
     gw_strain_query = GWStrainQuery('gw_strain_query')

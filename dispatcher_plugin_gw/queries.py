@@ -7,6 +7,14 @@ from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
 
 from .products import SkymapProduct, SpectrogramProduct, StrainProduct
+from astropy.time import Time as astropyTime
+
+def check_time_interval(T1, T2, maxinterval=60):
+    t1 = astropyTime(T1, format='isot')
+    t2 = astropyTime(T2, format='isot')
+    delta = t2 - t1
+    if delta.sec > maxinterval:
+        raise ValueError(f'Too long time interval. Current limit is {maxinterval}s')
 
 
 class Boolean(Parameter):
@@ -19,7 +27,7 @@ class Boolean(Parameter):
 
     @property
     def value(self):
-        return self._value
+        return str(self._value).lower() #because passed in json
 
     @value.setter
     def value(self, v):
@@ -34,18 +42,18 @@ class Boolean(Parameter):
             self._value = True
         else:
             raise ValueError(f'Wrong value for parameter {self.name}')
-class GWSourceQuery(BaseQuery):
-    def __init__(self, name):
-        t1 = Time(value='2017-08-17T12:40:54', name='T1', Time_format_name='T_format')
-        t2 = Time(value='2017-08-17T12:41:10', name='T2', Time_format_name='T_format')
+# class GWSourceQuery(BaseQuery):
+#     def __init__(self, name):
+#         t1 = Time(value='2017-08-17T12:40:54', name='T1', Time_format_name='T_format')
+#         t2 = Time(value='2017-08-17T12:41:10', name='T2', Time_format_name='T_format')
 
-        t_range = ParameterRange(t1, t2, 'time')
+#         t_range = ParameterRange(t1, t2, 'time')
 
-        token = Name(name_format='str', name='token',value=None)
+#         token = Name(name_format='str', name='token',value=None)
 
-        param_list = [t_range, token]
+#         param_list = [t_range, token]
 
-        super().__init__(name, param_list)
+#         super().__init__(name, param_list)
 
 class GWInstrumentQuery(BaseQuery):
     def __init__(self, 
@@ -64,14 +72,14 @@ class GWSpectrogramQuery(ProductQuery):
                 super().__init__(name, parameters_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           qmin = instrument.get_par_by_name('qmin').value,
                           qmax = instrument.get_par_by_name('qmax').value,
                          ) 
-        
+        check_time_interval(param_dict['t1'], param_dict['t2'])
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
@@ -96,7 +104,9 @@ class GWSpectrogramQuery(ProductQuery):
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            prod  = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_spectrogram_product'] = prod.serialize()
         else:
             prod  = prod_list.prod_list[0]
             prod.write()
@@ -114,9 +124,8 @@ class GWSpectrogramQuery(ProductQuery):
             query_out.prod_dictionary['name'] = 'spectrogram'
             query_out.prod_dictionary['file_name'] = 'spectrogram.h5'
             query_out.prod_dictionary['image'] = plot_dict
-            query_out.prod_dictionary['download_file_name'] = 'gw_spectrogram.h5'
+            query_out.prod_dictionary['download_file_name'] = 'gw_spectrogram.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
-
         return query_out
 
 
@@ -131,12 +140,13 @@ class GWStrainQuery(ProductQuery):
                 super().__init__(name, parameters_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           detector = instrument.get_par_by_name('detector').value,
                           whiten = instrument.get_par_by_name('whiten').value,
                           fmin = instrument.get_par_by_name('fmin').value,
                           fmax = instrument.get_par_by_name('fmax').value)
+        check_time_interval(param_dict['t1'], param_dict['t2'])
         return instrument.data_server_query_class(instrument=instrument,
                                                   config=config,
                                                   param_dict=param_dict,
@@ -164,7 +174,9 @@ class GWStrainQuery(ProductQuery):
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            prod  = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_strain_product_list'] = prod.serialize()
         else:
             prod  = prod_list.prod_list[0]
             prod.write()
@@ -184,7 +196,6 @@ class GWStrainQuery(ProductQuery):
             query_out.prod_dictionary['image'] = plot_dict
             query_out.prod_dictionary['download_file_name'] = 'gw_strain.tar.gz'
             query_out.prod_dictionary['prod_process_message'] = ''
-
         return query_out
 
 
@@ -193,17 +204,15 @@ class GWStrainQuery(ProductQuery):
 class GWSkymapQuery(ProductQuery):
     def __init__(self, name):
         do_cone_search = Boolean(True, name='do_cone_search')
-        ra = Angle(value = 0., units='deg', name='RA')
-        dec = Angle(value = 0, units='deg', name='DEC')
         radius = Angle(value = 0., units='deg', name='radius')
         level_threshold = Integer(10, name='level_threshold')
         contour_levels = Name('50,90', name='contour_levels')
-        parameter_list = [do_cone_search, ra, dec, radius, level_threshold, contour_levels]
+        parameter_list = [do_cone_search, radius, level_threshold, contour_levels]
         super().__init__(name, parameter_list)
 
     def get_data_server_query(self, instrument, config, **kwargs):
-        param_dict = dict(t1 = instrument.get_par_by_name('T1').value,
-                          t2 = instrument.get_par_by_name('T2').value,
+        param_dict = dict(t1 = instrument.get_par_by_name('T1').get_value_in_default_format(),
+                          t2 = instrument.get_par_by_name('T2').get_value_in_default_format(),
                           do_cone_search = instrument.get_par_by_name('do_cone_search').value,
                           ra = instrument.get_par_by_name('RA').value, 
                           dec = instrument.get_par_by_name('DEC').value, 
@@ -226,14 +235,23 @@ class GWSkymapQuery(ProductQuery):
         asciicat = _o_dict['output']['asciicat']
         imagedata = _o_dict['output']['image']
         fits_data = _o_dict['output']['skymap_files']
+        contours_data = _o_dict['output']['contours']
         
-        prod_list = [SkymapProduct(asciicat, imagedata, fits_data, out_dir)]
+        prod_list = [SkymapProduct(asciicat, 
+                                   imagedata, 
+                                   fits_data, 
+                                   contours_data, 
+                                   out_dir)]
        
         return prod_list
 
     def process_product_method(self, instrument, prod_list, api=False):
         if api is True:
-            raise NotImplementedError
+            skymap = prod_list.prod_list[0]
+            query_out = QueryOutput()
+            query_out.prod_dictionary['gw_skymap_product'] = skymap.serialize()
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict(api=True) 
+            
         else:
             skymap = prod_list.prod_list[0]
             
@@ -255,6 +273,6 @@ class GWSkymapQuery(ProductQuery):
             query_out.prod_dictionary['download_file_name'] = 'gw_skymap.tar.gz' 
             query_out.prod_dictionary['prod_process_message'] = ''
 
-            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict()
+            query_out.prod_dictionary['catalog'] = skymap.get_catalog_dict(api=False)
 
         return query_out

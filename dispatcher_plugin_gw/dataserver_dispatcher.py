@@ -4,7 +4,6 @@ import requests
 from cdci_data_analysis.analysis.products import QueryOutput
 from cdci_data_analysis.configurer import DataServerConf
 
-
 class GWDispatcher:
     def __init__(self, instrument=None, param_dict=None, task=None, config=None):
         if config is None:
@@ -111,15 +110,19 @@ class GWDispatcher:
             param_dict['_async_request_callback'] = call_back_url
             param_dict['_async_request'] = "yes"
 
-        url = "%s/%s" % (self.data_server_url, task)
-        res = requests.get("%s" % (url), params = param_dict)
+        url = '/'.join([self.data_server_url.strip('/'), task.strip('/')])
+        res = requests.get(url, params = param_dict)
         if res.status_code == 200:
             if res.json()['data']['exceptions']: #failed nb execution in async 
                 except_message = res.json()['data']['exceptions'][0]['ename']+': '+res.json()['data']['exceptions'][0]['evalue']
                 query_out.set_failed('Processing failed', 
                                      message=except_message)
                 raise RuntimeError(f'Processing failed. {except_message}')
-            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done')
+            if task.split('/')[-1] == 'conesearch' and param_dict['do_cone_search']:
+                comment = ''
+            else:
+                comment = 'Please note that RA and Dec parameters are not used.'
+            query_out.set_done(message=message, debug_message=str(debug_message),job_status='done',comment=comment)
         elif res.status_code == 201:
             if res.json()['workflow_status'] == 'submitted':
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='submitted')
@@ -127,9 +130,14 @@ class GWDispatcher:
                 query_out.set_status(0, message=message, debug_message=str(debug_message),job_status='progress')
                 #this anyway finally sets "submitted", the only status implemented now in "non-integral" dispatcher code
         else:
-            query_out.set_failed('Error in the backend', 
+            try:
+                query_out.set_failed('Error in the backend', 
                                  message='connection status code: ' + str(res.status_code), 
                                  extra_message=res.json()['exceptions'][0])
+            except:
+                query_out.set_failed('Error in the backend', 
+                                 message='connection status code: ' + str(res.status_code), 
+                                 extra_message = res.text)
             raise RuntimeError('Error in the backend')
 
         return res, query_out
