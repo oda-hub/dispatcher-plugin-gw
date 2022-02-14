@@ -110,12 +110,9 @@ class GWSpectrogramQuery(ProductQuery):
         else:
             prod  = prod_list.prod_list[0]
             prod.write()
-            script, div = prod.get_spectrogram_plot()
-            html_dict = {}
-            html_dict['script'] = script
-            html_dict['div'] = div
+                        
             plot_dict = {}
-            plot_dict['image'] = html_dict
+            plot_dict['image'] = prod.get_spectrogram_plot()
             plot_dict['header_text'] = ''
             plot_dict['table_text'] = ''
             plot_dict['footer_text'] = ''

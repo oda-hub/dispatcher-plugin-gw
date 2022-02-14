@@ -13,6 +13,7 @@ from bokeh.models import (ColorBar, CustomJS, HoverTool, LinearColorMapper,
 from bokeh.plotting import figure
 from gwpy.time import from_gps
 from oda_api.data_products import NumpyDataUnit, NumpyDataProduct
+from cdci_data_analysis.analysis.plot_tools import Image 
 
 class SpectrogramProduct:
     def __init__(self, sgram, out_dir=None):
@@ -46,88 +47,24 @@ class SpectrogramProduct:
     def get_spectrogram_plot(self):
         evt = from_gps(self.sgram.x0.value)
         
-        #TODO: almost copy of cdci_data_analysis.analysis.plot_tools.Image
-        #      would be better to implement needed functionality (axes titles etc.) there
+        spim = Image(self.sgram.T.value, {})
+        draw = spim.get_html_draw(w = 650,
+                                  h = 350,
+                                  y_scale = 'log',
+                                  x_range = (0, self.sgram.dx.value * len(self.sgram.xindex)),
+                                  y_range = (self.sgram.yindex[0].value, self.sgram.yindex[-1].value),
+                                  dw = [ self.sgram.dx.value * len(self.sgram.xindex) ],
+                                  dh = [ self.sgram.yindex[-1].value-self.sgram.yindex[0].value ],
+                                  y0 = self.sgram.yindex[0].value,
+                                  x_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
+                                                                               self.sgram.x0.value),
+                                  y_label = 'Frequency [Hz]',
+                                  enable_log_cmap = False,
+                                  )
         
-        fig = figure(tools=['pan,box_zoom,box_select,wheel_zoom,reset,save,crosshair'], 
-                   y_axis_type="log", 
-                   y_range=(self.sgram.yindex[0].value, self.sgram.yindex[-1].value), 
-                   x_range=(0, self.sgram.dx.value * len(self.sgram.xindex)),
-                   plot_height=350,
-                   plot_width=650,
-                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                    self.sgram.x0.value),
-                   y_axis_label = 'Frequency [Hz]')
-
-        min_s = self.sgram.min().value
-        max_s = self.sgram.max().value
+        return draw
         
-        color_mapper = LinearColorMapper(palette='Plasma256', 
-                                      low=min_s,
-                                      high=max_s)
-
-        fig_im = fig.image(image=[self.sgram.T], 
-                           x=0, 
-                           y=self.sgram.yindex[0].value, 
-                           dw=self.sgram.dx.value * len(self.sgram.xindex), 
-                           dh=self.sgram.yindex[-1].value-self.sgram.yindex[0].value, 
-                           color_mapper=color_mapper)
         
-        hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y"), ("value", "@image")],
-                          renderers=[fig_im])
-        
-        fig.add_tools(hover)
-        
-        color_bar = ColorBar(color_mapper=color_mapper, 
-                             label_standoff=5, 
-                             location=(0,0),
-                             width=10)
-        
-        JS_code_slider = """
-                   var vmin = low_slider.value;
-                   var vmax = high_slider.value;
-                   fig_im.glyph.color_mapper.high = vmax;
-                   fig_im.glyph.color_mapper.low = vmin;
-               """
-
-        callback = CustomJS(args=dict(fig_im=fig_im), code=JS_code_slider)
-
-        self.graph_min_slider = Slider(title="Norm. En. Min", 
-                                       start=min_s, 
-                                       end=max_s, 
-                                       step=1, 
-                                       value=min_s, 
-                                       callback=callback,
-                                       width=150)
-        self.graph_max_slider = Slider(title="Norm. En. Max", 
-                                       start=min_s, 
-                                       end=max_s, 
-                                       step=1, 
-                                       value=0.8 * max_s, 
-                                       callback=callback,
-                                       width=150)
-
-        self.graph_min_slider.on_change('value', self.change_image_contrast)
-        self.graph_max_slider.on_change('value', self.change_image_contrast)
-
-        callback.args["low_slider"] = self.graph_min_slider
-        callback.args["high_slider"] = self.graph_max_slider
-
-        fig.add_layout(color_bar, 'right')
-
-        layout = row(
-            fig, widgetbox(self.graph_min_slider, 
-                           self.graph_max_slider, 
-                          ),
-        )
-
-        script, div = components(layout)
-
-        return script, div
-
-    def change_image_contrast(self, attr, old, new):
-        self.fig_im.glyph.color_mapper.update(low=self.graph_min_slider.value, high=self.graph_max_slider.value)
-
 class StrainProduct:
     def __init__(self, ori_strain, filt_strain=None, out_dir=None):
         self.ori_strain = ori_strain
