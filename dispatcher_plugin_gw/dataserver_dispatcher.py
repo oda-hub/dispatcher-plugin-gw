@@ -113,7 +113,7 @@ class GWDispatcher:
         url = '/'.join([self.data_server_url.strip('/'), task.strip('/')])
         res = requests.get(url, params = param_dict)
         if res.status_code == 200:
-            if res.json()['data']['exceptions']: #failed nb execution in async 
+            if 'data' in res.json().keys() and res.json()['data']['exceptions']: #failed nb execution in async 
                 except_message = res.json()['data']['exceptions'][0]['ename']+': '+res.json()['data']['exceptions'][0]['evalue']
                 query_out.set_failed('Processing failed', 
                                      message=except_message)
