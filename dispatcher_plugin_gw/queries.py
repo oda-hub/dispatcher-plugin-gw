@@ -59,7 +59,7 @@ class GWInstrumentQuery(InstrumentQuery):
     def __init__(self, 
                  name):
         super().__init__(name)
-        detector = Name(value='H1', name='detector', allowed_values=['H1', 'L1', 'V1'])
+        detector = Name(value='H1', name='detector')
         self._parameters_list = [detector]
         self._build_par_dictionary()
         
