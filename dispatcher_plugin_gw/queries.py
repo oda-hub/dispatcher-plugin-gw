@@ -2,7 +2,7 @@ from cdci_data_analysis.analysis.parameters import (Angle, Integer, Name,
                                                     Parameter, ParameterRange,
                                                     Time)
 from cdci_data_analysis.analysis.products import QueryOutput
-from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery
+from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery, InstrumentQuery
 from gwpy.spectrogram import Spectrogram
 from gwpy.timeseries.timeseries import TimeSeries
 
@@ -55,13 +55,14 @@ class Boolean(Parameter):
 
 #         super().__init__(name, param_list)
 
-class GWInstrumentQuery(BaseQuery):
+class GWInstrumentQuery(InstrumentQuery):
     def __init__(self, 
                  name):
+        super().__init__(name)
         detector = Name(value='H1', name='detector')
-        param_list = [detector]
-        self.input_prod_list_name = None
-        super().__init__(name, param_list)
+        self._parameters_list = [detector]
+        self._build_par_dictionary()
+        
 
 class GWSpectrogramQuery(ProductQuery):
     def __init__(self, name):
