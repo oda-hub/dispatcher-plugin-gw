@@ -1,6 +1,6 @@
 from cdci_data_analysis.analysis.parameters import (Angle, Integer, Name,
                                                     Parameter, ParameterRange,
-                                                    Time)
+                                                    Time, Boolean)
 from cdci_data_analysis.analysis.products import QueryOutput
 from cdci_data_analysis.analysis.queries import BaseQuery, ProductQuery, InstrumentQuery
 from gwpy.spectrogram import Spectrogram
@@ -17,49 +17,11 @@ def check_time_interval(T1, T2, maxinterval=60):
         raise ValueError(f'Too long time interval. Current limit is {maxinterval}s')
 
 
-class Boolean(Parameter):
-    def __init__(self, value=None, name=None):
-
-        super().__init__(value=value,
-                         name=name
-                         )
-        self._set_val(value)
-
-    @property
-    def value(self):
-        return str(self._value).lower() #because passed in json
-
-    @value.setter
-    def value(self, v):
-        self._set_val(v)
-
-    def _set_val(self, value):
-        if value == 'false' or value == "False" or value == "no" \
-                            or str(value) == "0" or value is False:
-            self._value = False
-        elif value == 'true' or value == "True" or value == "yes" \
-                            or str(value) == "1" or value is True:
-            self._value = True
-        else:
-            raise ValueError(f'Wrong value for parameter {self.name}')
-# class GWSourceQuery(BaseQuery):
-#     def __init__(self, name):
-#         t1 = Time(value='2017-08-17T12:40:54', name='T1', Time_format_name='T_format')
-#         t2 = Time(value='2017-08-17T12:41:10', name='T2', Time_format_name='T_format')
-
-#         t_range = ParameterRange(t1, t2, 'time')
-
-#         token = Name(name_format='str', name='token',value=None)
-
-#         param_list = [t_range, token]
-
-#         super().__init__(name, param_list)
-
 class GWInstrumentQuery(InstrumentQuery):
     def __init__(self, 
                  name):
         super().__init__(name)
-        detector = Name(value='H1', name='detector')
+        detector = Name(value='H1', name='detector', allowed_values=['H1', 'L1', 'V1'])
         self._parameters_list = [detector]
         self._build_par_dictionary()
         
@@ -67,7 +29,7 @@ class GWInstrumentQuery(InstrumentQuery):
 class GWSpectrogramQuery(ProductQuery):
     def __init__(self, name):
                 whiten = Boolean(value=True, name='whiten')
-                qmin = Integer(value=4, name='qmin')
+                qmin = Integer(value=4, name='qmin', )
                 qmax = Integer(value=64, name='qmax')
                 parameters_list = [whiten, qmin, qmax]
                 super().__init__(name, parameters_list)
@@ -202,8 +164,8 @@ class GWStrainQuery(ProductQuery):
 class GWSkymapQuery(ProductQuery):
     def __init__(self, name):
         do_cone_search = Boolean(True, name='do_cone_search')
-        radius = Angle(value = 0., units='deg', name='radius')
-        level_threshold = Integer(10, name='level_threshold')
+        radius = Angle(value = 10., units='deg', name='radius', min_value=0, max_value=360)
+        level_threshold = Integer(10, name='level_threshold', min_value=0, max_value=100)
         contour_levels = Name('50,90', name='contour_levels')
         parameter_list = [do_cone_search, radius, level_threshold, contour_levels]
         super().__init__(name, parameter_list)
