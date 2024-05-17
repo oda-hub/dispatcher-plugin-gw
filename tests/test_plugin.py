@@ -49,7 +49,7 @@ def test_discover_plugin():
 
 def test_gw(dispatcher_live_fixture, httpserver, product):
     server = dispatcher_live_fixture
-    with open(f'tests/mock_backend_json/response_{product}.json', 'r') as fd:
+    with open(f'mock_backend_json/response_{product}.json', 'r') as fd:
         respjson = json.loads(fd.read())
     httpserver.expect_ordered_request('/').respond_with_data('')    
     httpserver.expect_ordered_request(f'/api/v1.0/get/{product}').respond_with_json({'comment': "task created", "workflow_status": "submitted"}, status=201)
@@ -82,7 +82,7 @@ def test_gw(dispatcher_live_fixture, httpserver, product):
     
     d = requests.get(server + "/download_products",
                     params = {
-                        'session_id': jdata['job_monitor']['session_id'],
+                        'session_id': jdata['session_id'],
                         'download_file_name': jdata['products']['download_file_name'],
                         'file_list': jdata['products']['file_name'],
                         'query_status': 'ready',
