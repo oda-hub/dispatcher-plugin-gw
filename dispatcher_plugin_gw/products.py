@@ -7,7 +7,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.io.ascii import read as aread
 from bokeh.embed import components
-from bokeh.layouts import column, row, widgetbox
+from bokeh.layouts import column, row
 from bokeh.models import (ColorBar, CustomJS, HoverTool, LinearColorMapper,
                           Slider)
 from bokeh.plotting import figure
