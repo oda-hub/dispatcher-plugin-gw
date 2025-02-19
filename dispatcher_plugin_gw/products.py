@@ -7,7 +7,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.io.ascii import read as aread
 from bokeh.embed import components
-from bokeh.layouts import column, row, widgetbox
+from bokeh.layouts import column
 from bokeh.models import (ColorBar, CustomJS, HoverTool, LinearColorMapper,
                           Slider)
 from bokeh.plotting import figure
@@ -102,27 +102,27 @@ class StrainProduct:
                           self.ori_strain.dt.value )
        
         hover = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
-                          
-        fig = figure(tools=[hover, 'wheel_zoom,box_zoom,pan,reset,save,crosshair'], 
-                   plot_height=280,
-                   plot_width=700,
-                   x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                    self.ori_strain.t0.value),
-                   title='Original strain timeseries'
-                   )
+
+        fig = figure(tools=[hover, 'wheel_zoom,box_zoom,pan,reset,save,crosshair'],
+                     height=280,
+                     width=700,
+                     x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"),
+                                                                       self.ori_strain.t0.value),
+                     title='Original strain timeseries'
+                     )
         ln = fig.line(times, self.ori_strain.value, line_color='blue')
 
         if self.filt_strain is not None:
             hover1 = HoverTool(tooltips=[("x", "$x"), ("y", "$y")])
-                          
-            fig1 = figure(tools=[hover, 'wheel_zoom,box_zoom,pan,reset,save,crosshair'], 
-                    plot_height=280,
-                    plot_width=700,
-                    x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"), 
-                                                                        self.ori_strain.t0.value),
-                    x_range = fig.x_range,
-                    title='Bandpassed strain timeseries'
-                    )
+
+            fig1 = figure(tools=[hover, 'wheel_zoom,box_zoom,pan,reset,save,crosshair'],
+                          height=280,
+                          width=700,
+                          x_axis_label = 'Time [seconds] from %s (%.1f)' % (evt.strftime("%Y-%m-%d %T UTC"),
+                                                                            self.ori_strain.t0.value),
+                          x_range = fig.x_range,
+                          title='Bandpassed strain timeseries'
+                          )
             ln1 = fig1.line(times, self.filt_strain.value, line_color='blue')
 
             layout = column(fig, fig1)
